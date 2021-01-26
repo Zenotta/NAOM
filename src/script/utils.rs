@@ -84,6 +84,24 @@ pub fn tx_ins_are_valid(tx_ins: &[TxIn], is_in_utxo: impl Fn(&OutPoint) -> bool)
     true
 }
 
+/// Checks for sanctioned addresses in the `TxIn`s. If any
+/// are found, returns false
+///
+/// ### Arguments
+///
+/// * `tx_ins`  - The OutPoints to check for sanctioned addresses
+pub fn tx_sanction_filter(tx_ins: &Vec<TxIn>, sanction_list: &Vec<String>) -> bool {
+    for entry in tx_ins {
+        if let Some(o) = &entry.previous_out {
+            if sanction_list.contains(&o.t_hash) {
+                return false;
+            }
+        }
+    }
+
+    true
+}
+
 /// Checks whether a complete validation multisig transaction is in fact valid
 ///
 /// ### Arguments
