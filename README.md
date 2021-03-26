@@ -3,6 +3,8 @@
 The NAOM repo contains all the code needed to set up and interact with a local instance of the Zenotta blockchain. 
 Other language options can be found here:
 
+- [中文](https://gitlab.com/zenotta/naom/-/blob/main/README.zhs.md)
+- [Deutsch](https://gitlab.com/zenotta/naom/-/blob/main/README.de.md)
 - [Française](https://gitlab.com/zenotta/naom/-/blob/main/README.fr.md)
 - [Afrikaans](https://gitlab.com/zenotta/naom/-/blob/main/README.af.md)
 
@@ -10,15 +12,20 @@ If you'd like to help with translations, or spot a mistake, feel free to open a 
 
 ..
 
-## Getting Started
+## Development
 
-Running NAOM assumes you have Rust installed and are using a Unix system. You can clone this repo and run the `Makefile` to set everything up for a development environment:
+For development NAOM requires the following installations:
+
+- [Rust](https://www.rust-lang.org/tools/install)
+
+You can clone this repo and run the tests as follows:
 
 ```
-make
 cargo build
 cargo test
 ```
+
+Before pushing any code up to this repo it's advised that you run `make` from root to format and lint the code for the CI.
 
 ..
 

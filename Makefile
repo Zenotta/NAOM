@@ -1,7 +1,7 @@
 init:
-	@cp .hooks/* .git/hooks
-	@chmod +x .git/hooks
 	@echo ""
-	@echo "Set Git hooks up successfully. You're now ready to code!"
+	@echo "Running Cargo utils"
 	@echo ""
+	@cargo fmt
+	@cargo clippy
 .PHONY: init
