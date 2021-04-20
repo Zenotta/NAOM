@@ -1,5 +1,3 @@
-use crate::primitives::asset::Asset;
-use crate::primitives::druid::DruidExpectation;
 use crate::primitives::transaction::Transaction;
 use crate::sha3::Digest;
 use bincode::serialize;
@@ -15,7 +13,7 @@ use std::iter::Extend;
 /// * `transactions`    - Transactions to verify
 pub fn druid_expectations_are_met(druid: String, transactions: &[Transaction]) -> bool {
     let mut expects = BTreeSet::new();
-    let mut tx_source = BTreeSet::new();
+    let mut expectation_collect = BTreeSet::new();
 
     for tx in transactions {
         if let Some(druid_info) = &tx.druid_info {
@@ -27,24 +25,20 @@ pub fn druid_expectations_are_met(druid: String, transactions: &[Transaction]) -
 
                 for out in &tx.outputs {
                     if let Some(pk) = &out.script_public_key {
-                        tx_source.insert((ins.clone(), pk, &out.value));
+                        expectation_collect.insert((ins.clone(), pk, &out.value));
                     }
                 }
             }
         }
     }
 
-    expects.iter().all(|e| expectation_met(e, &tx_source))
-}
-
-/// Predicate for expected transaction presence in the transaction set
-///
-/// ### Arguments
-///
-/// * `e`           - The expectation to check on
-/// * `tx_source`   - The source transaction source to match against
-fn expectation_met(e: &DruidExpectation, tx_source: &BTreeSet<(String, &String, &Asset)>) -> bool {
-    tx_source.get(&(e.from.clone(), &e.to, &e.asset)).is_some()
+    let expectation_met: BTreeSet<_> = expectation_collect
+        .iter()
+        .map(|(f, t, a)| (f, *t, *a))
+        .collect();
+    expects
+        .iter()
+        .all(|e| expectation_met.contains(&(&e.from, &e.to, &e.asset)))
 }
 
 #[cfg(test)]
