@@ -516,14 +516,16 @@ pub fn construct_rb_receive_payment_tx(
     sender_address: String,
     locktime: u64,
     druid: String,
+    drs_block_hash: String,
+    drs_tx_hash: String,
     expectation: Vec<DruidExpectation>,
 ) -> Transaction {
     let out = TxOut {
         value: Asset::Receipt(1),
         locktime,
         script_public_key: Some(sender_address),
-        drs_block_hash: None, // this will need to change
-        drs_tx_hash: None,    // this will need to change
+        drs_block_hash: Some(drs_block_hash),
+        drs_tx_hash: Some(drs_tx_hash),
     };
     tx_outs.push(out);
     construct_rb_tx_core(tx_ins, tx_outs, druid, expectation)
