@@ -7,6 +7,7 @@ pub struct DruidExpectation {
     pub from: String,
     pub to: String,
     pub asset: Asset,
+    pub drs_tx_hash: Option<String>,
 }
 
 /// A structure to hold DDE-specific content in a transaction

@@ -101,6 +101,24 @@ impl Default for Asset {
 }
 
 impl Asset {
+    // Get a string representation of the `Asset` type (e.g. "Receipt")
+    pub fn string_name(&self) -> String {
+        match self {
+            Asset::Token(_) => "Token".to_string(),
+            Asset::Data(_) => "Data".to_string(),
+            Asset::Receipt(_) => "Receipt".to_string(),
+        }
+    }
+
+    // Get a u64 representation of the amount for an `Asset`
+    pub fn amount(&self) -> u64 {
+        match self {
+            Asset::Token(amount) => amount.0,
+            Asset::Data(data) => data.amount,
+            Asset::Receipt(amount) => *amount,
+        }
+    }
+
     pub fn len(&self) -> usize {
         match self {
             Asset::Token(_) => size_of::<TokenAmount>(),

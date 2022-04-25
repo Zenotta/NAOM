@@ -28,7 +28,7 @@ pub fn druid_expectations_are_met<'a>(
 
                 for out in &tx.outputs {
                     if let Some(pk) = &out.script_public_key {
-                        tx_source.insert((ins.clone(), pk, &out.value));
+                        tx_source.insert((ins.clone(), pk, &out.value, &out.drs_tx_hash));
                     }
                 }
             }
@@ -44,8 +44,13 @@ pub fn druid_expectations_are_met<'a>(
 ///
 /// * `e`           - The expectation to check on
 /// * `tx_source`   - The source transaction source to match against
-fn expectation_met(e: &DruidExpectation, tx_source: &BTreeSet<(String, &String, &Asset)>) -> bool {
-    tx_source.get(&(e.from.clone(), &e.to, &e.asset)).is_some()
+fn expectation_met(
+    e: &DruidExpectation,
+    tx_source: &BTreeSet<(String, &String, &Asset, &Option<String>)>,
+) -> bool {
+    tx_source
+        .get(&(e.from.clone(), &e.to, &e.asset, &e.drs_tx_hash))
+        .is_some()
 }
 
 #[cfg(test)]
@@ -93,11 +98,13 @@ mod tests {
                 from: from_addr.clone(),
                 to: bob_addr,
                 asset: alice_asset,
+                drs_tx_hash: None,
             },
             DruidExpectation {
                 from: from_addr,
                 to: alice_addr,
                 asset: bob_asset,
+                drs_tx_hash: None,
             },
         ];
 
@@ -144,6 +151,7 @@ mod tests {
                 from: from_addr.clone(),
                 to: alice_addr.clone(),
                 asset: Asset::Receipt(1),
+                drs_tx_hash: Some("drs_tx_hash".to_owned()), // All receipt-assets must contain a DRS
             };
 
             let mut tx = construct_rb_payments_send_tx(
@@ -171,6 +179,7 @@ mod tests {
                 from: from_addr,
                 to: bob_addr,
                 asset: Asset::Token(payment),
+                drs_tx_hash: None,
             };
 
             // create the sender that match the receiver.
@@ -181,6 +190,7 @@ mod tests {
                 0,
                 druid,
                 vec![expectation],
+                Some("drs_tx_hash".to_owned()), // All receipt-assets must contain a DRS
             )
         };
 
@@ -263,6 +273,19 @@ mod tests {
     fn should_fail_rb_payment_value_expect_mismatch() {
         let (mut send_tx, recv_tx) = create_rb_payment_txs();
         send_tx.outputs[0].value = Asset::token_u64(10);
+
+        // Non-matching address expectation
+        assert!(!druid_expectations_are_met(
+            "VALUE",
+            vec![send_tx, recv_tx].iter()
+        ));
+    }
+
+    #[test]
+    /// Checks that receipt-based payments with non-matching DRS expectations fail
+    fn should_fail_rb_payment_drs_expect_mismatch() {
+        let (send_tx, mut recv_tx) = create_rb_payment_txs();
+        recv_tx.outputs[0].drs_tx_hash = Some("invalid_drs_tx_hash".to_string());
 
         // Non-matching address expectation
         assert!(!druid_expectations_are_met(

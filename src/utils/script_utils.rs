@@ -1,22 +1,25 @@
 #![allow(unused)]
 use crate::constants::{NETWORK_VERSION_TEMP, NETWORK_VERSION_V0, TOTAL_TOKENS};
 use crate::crypto::sha3_256;
+use crate::crypto::sign_ed25519::{self as sign, PublicKey, Signature};
 use crate::primitives::asset::{Asset, TokenAmount};
 use crate::primitives::druid::DruidExpectation;
 use crate::primitives::transaction::*;
 use crate::script::interface_ops;
 use crate::script::lang::Script;
 use crate::script::{OpCodes, StackEntry};
+use crate::utils::get_drs_tx_hash;
 use crate::utils::transaction_utils::{
     construct_address, construct_tx_in_signable_asset_hash, construct_tx_in_signable_hash,
 };
-
-use crate::crypto::sign_ed25519::{self as sign, PublicKey, Signature};
 use bincode::serialize;
 use bytes::Bytes;
 use hex::encode;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use tracing::{debug, error, info, trace};
+
+// BTreeMap<Asset represented as string, BTreeMap<drs_tx_hash, amount>>
+type SpentTxInsOuts = BTreeMap<String, BTreeMap<Option<String>, u64>>;
 
 /// Verifies that a member of a multisig tx script is valid
 ///
@@ -51,15 +54,26 @@ pub fn member_multisig_is_valid(script: Script) -> bool {
 ///
 /// ### Arguments
 ///
-/// * `tx_ins`  - Tx_ins to verify
+/// * `tx`  - Transaction to verify
 pub fn tx_is_valid<'a>(
     tx: &Transaction,
     is_in_utxo: impl Fn(&OutPoint) -> Option<&'a TxOut> + 'a,
 ) -> bool {
-    let mut tx_in_amount = TokenAmount(0);
+    let mut tx_ins_spent: SpentTxInsOuts = SpentTxInsOuts::new();
+
+    // TODO: Add support for `Data` asset variant
+    if tx.outputs.iter().any(|out| {
+        // `Receipt` assets MUST have an a DRS value associated with them
+        (out.value.is_receipt() && out.drs_tx_hash.is_none())
+            // `Token` assets must NOT have an a DRS value associated with them
+            || (out.value.is_token() && out.drs_tx_hash.is_some())
+    }) {
+        error!("INVALID TXOUT DRS TX HASH SPECIFICATION");
+        return false;
+    }
 
     for tx_in in &tx.inputs {
-        // Check tx is in utxo
+        // Ensure the transaction is in the `UTXO` set
         let tx_out_point = tx_in.previous_out.as_ref().unwrap().clone();
         let tx_out = is_in_utxo(&tx_out_point);
 
@@ -70,7 +84,7 @@ pub fn tx_is_valid<'a>(
             return false;
         };
 
-        // At this point TxIn will be valid
+        // At this point `TxIn` will be valid
         let tx_out_pk = tx_out.script_public_key.as_ref();
         let tx_out_hash = construct_tx_in_signable_hash(&tx_out_point);
 
@@ -83,32 +97,72 @@ pub fn tx_is_valid<'a>(
             return false;
         }
 
-        tx_in_amount += tx_out.value.token_amount();
+        // Get `drs_tx_hash` from `OutPoint` and `TxOut` pair
+        let drs_tx_hash = get_drs_tx_hash(&tx_out_point, tx_out);
+
+        *tx_ins_spent
+            .entry(tx_out.value.string_name())
+            .or_insert_with(|| Some((drs_tx_hash.clone(), 0_u64)).into_iter().collect())
+            .entry(drs_tx_hash.clone())
+            .or_insert(0_u64) += tx_out.value.amount();
     }
 
-    tx_outs_are_valid(&tx.outputs, tx_in_amount)
+    tx_outs_are_valid(&tx.outputs, tx_ins_spent)
 }
 
-/// Verifies that the outgoing TxOuts are valid. Returns false if a single
+/// Verifies that the outgoing `TxOut`s are valid. Returns false if a single
 /// transaction doesn't verify.
 ///
 /// TODO: Abstract to data assets
 ///
 /// ### Arguments
 ///
-/// * `tx_outs` - TxOuts to verify
-/// * `amount_spent` - Total amount spendable from TxIns
-pub fn tx_outs_are_valid(tx_outs: &[TxOut], amount_spent: TokenAmount) -> bool {
-    let tx_out_amount: TokenAmount = tx_outs.iter().map(|a| a.value.token_amount()).sum();
+/// * `tx_outs` - `TxOut`s to verify
+/// * `tx_ins_spent` - Total amount spendable from `TxIn`s
+pub fn tx_outs_are_valid(tx_outs: &[TxOut], tx_ins_spent: SpentTxInsOuts) -> bool {
+    let mut tx_outs_spent: SpentTxInsOuts = SpentTxInsOuts::new();
 
-    tx_out_amount <= TokenAmount(TOTAL_TOKENS) && tx_out_amount == amount_spent
+    for tx_out in tx_outs {
+        *tx_outs_spent
+            .entry(tx_out.value.string_name())
+            .or_insert_with(|| {
+                Some((tx_out.drs_tx_hash.clone(), 0_u64))
+                    .into_iter()
+                    .collect()
+            })
+            .entry(tx_out.drs_tx_hash.clone())
+            .or_insert(0_u64) += tx_out.value.amount();
+    }
+
+    // Ensure that the `TxIn`s correlate with the `TxOut`s
+    correct_amount_spent(tx_ins_spent, tx_outs_spent)
+}
+
+// Check to ensure the TxOut spent values correlate with the TxIn values
+fn correct_amount_spent(tx_ins_spent: SpentTxInsOuts, tx_outs_spent: SpentTxInsOuts) -> bool {
+    tx_ins_spent.iter().all(|(asset_type, spent)| {
+        spent.iter().all(|(drs_tx_hash, amount)| {
+            let tx_out_spent_amount = tx_outs_spent
+                .get(asset_type)
+                .and_then(|v| v.get(drs_tx_hash))
+                .unwrap_or(&0_u64);
+
+            let tx_ins_spent_amount = spent.get(drs_tx_hash).unwrap_or(&0);
+
+            *tx_out_spent_amount == *tx_ins_spent_amount
+                // TODO: Handle receipt amount spent larger than TOTAL_TOKENS?
+                && *tx_out_spent_amount <= TOTAL_TOKENS
+                && *tx_out_spent_amount != 0_u64
+                && *tx_ins_spent_amount != 0_u64
+        })
+    })
 }
 
 /// Checks whether a complete validation multisig transaction is in fact valid
 ///
 /// ### Arguments
 ///
-/// * `script`  - Script to validate
+/// * `script`  - `Script` to validate
 fn tx_has_valid_multsig_validation(script: &Script) -> bool {
     let mut current_stack: Vec<StackEntry> = Vec::with_capacity(script.stack.len());
     let mut test_for_return = true;
@@ -292,6 +346,7 @@ mod tests {
     use crate::primitives::asset::{Asset, DataAsset};
     use crate::primitives::druid::DdeValues;
     use crate::primitives::transaction::OutPoint;
+    use crate::utils::test_utils::generate_tx_with_ins_and_outs_assets;
     use crate::utils::transaction_utils::*;
 
     /// Util function to create p2pkh TxIns
@@ -704,10 +759,8 @@ mod tests {
         let tx_hash = hex::encode(vec![0, 0, 0]);
         let tx_outpoint = OutPoint::new(tx_hash, 0);
         let script_public_key = construct_address_for(&pk, address_version);
-        let tx_out = TxOut {
-            script_public_key: Some(script_public_key.clone()),
-            ..TxOut::default()
-        };
+        let tx_in_previous_out = TxOut::new_token_amount(script_public_key.clone(), TokenAmount(5));
+        let ongoing_tx_outs = vec![tx_in_previous_out.clone()];
 
         let valid_bytes = construct_tx_in_signable_hash(&tx_outpoint);
         let valid_sig = sign::sign_detached(valid_bytes.as_bytes(), &sk);
@@ -743,14 +796,15 @@ mod tests {
                 },
                 previous_out: Some(tx_outpoint.clone()),
             }];
-            let ongoing_tx_outs = vec![TxOut::new()];
             let tx = Transaction {
                 inputs: tx_ins,
-                outputs: ongoing_tx_outs,
+                outputs: ongoing_tx_outs.clone(),
                 ..Default::default()
             };
 
-            let result = tx_is_valid(&tx, |v| Some(&tx_out).filter(|_| v == &tx_outpoint));
+            let result = tx_is_valid(&tx, |v| {
+                Some(&tx_in_previous_out).filter(|_| v == &tx_outpoint)
+            });
             actual_result.push(result);
         }
 
@@ -761,6 +815,95 @@ mod tests {
             actual_result,
             inputs.iter().map(|(_, e)| *e).collect::<Vec<bool>>(),
         );
+    }
+
+    #[test]
+    /// Test transaction validation with multiple different DRS
+    /// configurations for `TxIn` and `TxOut` values
+    fn test_tx_drs() {
+        ///
+        /// Arrange
+        ///
+
+        /// Test Case 1 | Tokens only | Success |:
+        /// 1. Inputs contain two TxIns for Tokens of amounts 3 and 2
+        /// 2. Outputs contain TxOuts for Tokens of amounts 3 and 2
+        let (utxo_1, tx_1) =
+            generate_tx_with_ins_and_outs_assets(&[(3, None), (2, None)], &[(3, None), (2, None)]);
+
+        /// Test Case 2 | Tokens only | Failure |:
+        /// 1. Inputs contain two TxIns for Tokens of amounts 3 and 2
+        /// 2. Outputs contain TxOuts for Tokens of amounts 3 and 3
+        /// 3. TxIn Tokens amount does not match TxOut Tokens amount        
+        let (utxo_2, tx_2) =
+            generate_tx_with_ins_and_outs_assets(&[(3, None), (2, None)], &[(3, None), (3, None)]);
+
+        /// Test Case 3 | Receipts only | Failure |:
+        /// 1. Inputs contain two TxIns for Receipts of amount 3 and 2 with different `drs_tx_hash` values
+        /// 2. Outputs contain TxOuts for Receipts of amount 3 and 3
+        /// 3. TxIn DRS matches TxOut DRS for Receipts; Amount of Receipts spent does not match       
+        let (utxo_3, tx_3) = generate_tx_with_ins_and_outs_assets(
+            &[(3, Some("drs_tx_hash_1")), (2, Some("drs_tx_hash_2"))],
+            &[(3, Some("drs_tx_hash_1")), (3, Some("drs_tx_hash_2"))],
+        );
+
+        /// Test Case 4 | Receipts only | Failure |:
+        /// 1. Inputs contain two TxIns for Receipts of amount 3 and 2 with different `drs_tx_hash` values
+        /// 2. Outputs contain TxOuts for Receipts of amount 3 and 2
+        /// 3. TxIn DRS does not match TxOut DRS for Receipts; Amount of Receipts spent matches       
+        let (utxo_4, tx_4) = generate_tx_with_ins_and_outs_assets(
+            &[(3, Some("drs_tx_hash_1")), (2, Some("drs_tx_hash_2"))],
+            &[(3, Some("drs_tx_hash_1")), (2, Some("invalid_drs_tx_hash"))],
+        );
+
+        /// Test Case 5 | Receipts and Tokens | Success |:
+        /// 1. Inputs contain two TxIns for Receipts of amount 3 and Tokens of amount 2
+        /// 2. Outputs contain TxOuts for Receipts of amount 3 and Tokens of amount 2
+        /// 3. TxIn DRS matches TxOut DRS for Receipts; Amount of Receipts and Tokens spent matches               
+        let (utxo_5, tx_5) = generate_tx_with_ins_and_outs_assets(
+            &[(3, Some("drs_tx_hash")), (2, None)],
+            &[(3, Some("drs_tx_hash")), (2, None)],
+        );
+
+        /// Test Case 6 | Receipts and Tokens | Failure |:
+        /// 1. Inputs contain two TxIns for Receipts of amount 3 and Tokens of amount 2
+        /// 2. Outputs contain TxOuts for Receipts of amount 2 and Tokens of amount 2
+        /// 3. TxIn DRS matches TxOut DRS for Receipts; Amount of Receipts spent does not match               
+        let (utxo_6, tx_6) = generate_tx_with_ins_and_outs_assets(
+            &[(3, Some("drs_tx_hash")), (2, None)],
+            &[(2, Some("drs_tx_hash")), (2, None)],
+        );
+
+        /// Test Case 7 | Receipts and Tokens | Failure |:
+        /// 1. Inputs contain two TxIns for Receipts of amount 3 and Tokens of amount 2
+        /// 2. Outputs contain TxOuts for Receipts of amount 1 and Tokens of amount 1
+        /// 3. TxIn DRS does not match TxOut DRS for Receipts; Amount of Receipts and Tokens spent does not match               
+        let (utxo_7, tx_7) = generate_tx_with_ins_and_outs_assets(
+            &[(3, Some("drs_tx_hash")), (2, None)],
+            &[(1, Some("invalid_drs_tx_hash")), (1, None)],
+        );
+
+        ///
+        /// Act
+        ///
+        let result_1 = tx_is_valid(&tx_1, |v| utxo_1.get(v));
+        let result_2 = tx_is_valid(&tx_2, |v| utxo_2.get(v));
+        let result_3 = tx_is_valid(&tx_3, |v| utxo_3.get(v));
+        let result_4 = tx_is_valid(&tx_4, |v| utxo_4.get(v));
+        let result_5 = tx_is_valid(&tx_5, |v| utxo_5.get(v));
+        let result_6 = tx_is_valid(&tx_6, |v| utxo_6.get(v));
+        let result_7 = tx_is_valid(&tx_7, |v| utxo_7.get(v));
+
+        ///
+        /// Assert
+        ///
+        assert!(result_1); // Success
+        assert!(!result_2); // Failure
+        assert!(!result_3); // Failure
+        assert!(!result_4); // Failure
+        assert!(result_5); // Success
+        assert!(!result_6); // Failure
+        assert!(!result_7); // Failure
     }
 
     #[test]

@@ -517,13 +517,14 @@ pub fn construct_rb_receive_payment_tx(
     locktime: u64,
     druid: String,
     expectation: Vec<DruidExpectation>,
+    drs_tx_hash: Option<String>,
 ) -> Transaction {
     let out = TxOut {
         value: Asset::Receipt(1),
         locktime,
         script_public_key: Some(sender_address),
         drs_block_hash: None, // this will need to change
-        drs_tx_hash: None,    // this will need to change
+        drs_tx_hash,
     };
     tx_outs.push(out);
     construct_rb_tx_core(tx_ins, tx_outs, druid, expectation)
@@ -790,6 +791,7 @@ mod tests {
             from: from_addr,
             to: to_asset,
             asset: data.clone(),
+            drs_tx_hash: None,
         }];
 
         // Actual DDE
@@ -830,6 +832,7 @@ mod tests {
                 from: from_addr.clone(),
                 to: alice_addr.clone(),
                 asset: Asset::Receipt(1),
+                drs_tx_hash: Some("drs_tx_hash".to_owned()), // All receipt assets must contain DRS
             };
 
             let mut tx = construct_rb_payments_send_tx(
@@ -857,6 +860,7 @@ mod tests {
                 from: from_addr,
                 to: bob_addr,
                 asset: Asset::Token(payment),
+                drs_tx_hash: None,
             };
 
             // create the sender that match the receiver.
@@ -867,6 +871,7 @@ mod tests {
                 0,
                 druid.clone(),
                 vec![expectation],
+                Some("drs_tx_hash".to_owned()),
             )
         };
 

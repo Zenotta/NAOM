@@ -114,19 +114,27 @@ impl TxOut {
         }
     }
 
-    pub fn new_receipt_amount(to_address: String, amount: u64) -> TxOut {
+    /// Creates a new TxOut instance for a `Receipt` asset
+    ///
+    /// **NOTE:** Only create transactions may have `Receipt` assets that have a `None` `drs_tx_hash`
+    pub fn new_receipt_amount(
+        to_address: String,
+        amount: u64,
+        drs_tx_hash: Option<String>,
+    ) -> TxOut {
         TxOut {
             value: Asset::Receipt(amount),
             script_public_key: Some(to_address),
+            drs_tx_hash,
             ..Default::default()
         }
     }
 
     //TODO: Add handling for `Data' asset variant
-    pub fn new_asset(to_address: String, asset: Asset) -> TxOut {
+    pub fn new_asset(to_address: String, asset: Asset, drs_tx_hash: Option<String>) -> TxOut {
         match asset {
             Asset::Token(amount) => TxOut::new_token_amount(to_address, amount),
-            Asset::Receipt(amount) => TxOut::new_receipt_amount(to_address, amount),
+            Asset::Receipt(amount) => TxOut::new_receipt_amount(to_address, amount, drs_tx_hash),
             _ => panic!("Cannot create TxOut for asset of type {:?}", asset),
         }
     }

@@ -117,7 +117,7 @@ pub fn gen_random_hash() -> String {
         .take(32)
         .map(char::from)
         .collect();
-    hex::encode(sha3_256::digest(rand_2.as_bytes()).to_vec())
+    hex::encode(sha3_256::digest(rand_2.as_bytes()))
 }
 
 /// Builds hex encoded sha3 hash of the passed transactions
