@@ -6,6 +6,7 @@ echo "Running formatter for Rust code"
 echo "//-----------------------------//"
 echo " "
 cargo fmt
+git add -A
 echo "\033[0;32mFormatting done...\033[0m"
 echo " "
 
