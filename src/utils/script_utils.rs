@@ -17,6 +17,7 @@ use bincode::serialize;
 use bytes::Bytes;
 use hex::encode;
 use std::collections::{BTreeMap, BTreeSet};
+use std::thread::current;
 use tracing::{debug, error, info, trace};
 
 use super::transaction_utils::construct_p2sh_address;
@@ -178,12 +179,14 @@ pub fn tx_has_valid_create_script(script: &Script, asset: &Asset) -> bool {
     if let (
         Some(StackEntry::Op(OpCodes::OP_CREATE)),
         Some(StackEntry::Num(_)),
+        Some(StackEntry::Op(OpCodes::OP_DROP)),
         Some(StackEntry::Bytes(b)),
         Some(StackEntry::Signature(_)),
         Some(StackEntry::PubKey(_)),
         Some(StackEntry::Op(OpCodes::OP_CHECKSIG)),
         None,
     ) = (
+        it.next(),
         it.next(),
         it.next(),
         it.next(),
@@ -343,6 +346,10 @@ fn interpret_script(script: &Script) -> bool {
                 StackEntry::Op(OpCodes::OP_TUCK) => {
                     test_for_return &= interface_ops::op_tuck(&mut current_stack);
                 }
+                StackEntry::Op(OpCodes::OP_CREATE) => {
+                    current_stack.pop();
+                }
+                
                 /*---- CRYPTO OPS ----*/
                 StackEntry::Op(OpCodes::OP_HASH256) => {
                     test_for_return &= interface_ops::op_hash256(&mut current_stack, None);
@@ -371,7 +378,8 @@ fn interpret_script(script: &Script) -> bool {
         }
     }
 
-    test_for_return
+    println!("Stack: {:?}", current_stack);
+    test_for_return && current_stack.len() == 0
 }
 
 /// Does pairwise validation of signatures against public keys
