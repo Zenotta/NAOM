@@ -601,11 +601,13 @@ pub fn construct_payment_tx_ins(tx_values: Vec<TxConstructor>) -> Vec<TxIn> {
     tx_ins
 }
 
-/// Constructs the TxIn for a P2SH redemption
+/// Constructs the TxIn for a P2SH redemption. The redeemer must supply a script that
+/// matches the scriptPubKey of the output being spent.
 ///
 /// ### Arguments
 ///
 /// * `tx_values`   - Series of values required for TxIn construction
+/// * `script`      - Script to be used in the scriptSig
 pub fn construct_p2sh_redeem_tx_ins(tx_values: TxConstructor, script: Script) -> Vec<TxIn> {
     let mut tx_ins = Vec::new();
     let previous_out = Some(tx_values.previous_out);
