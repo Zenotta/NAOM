@@ -260,7 +260,7 @@ fn tx_has_valid_p2pkh_sig(script: &Script, outpoint_hash: &str, tx_out_pub_key: 
 pub fn tx_has_valid_p2sh_script(script: &Script, address: &str) -> bool {
     let p2sh_address = construct_p2sh_address(script);
 
-    if &p2sh_address == address {
+    if p2sh_address == address {
         return interpret_script(script);
     }
 
@@ -378,8 +378,8 @@ fn interpret_script(script: &Script) -> bool {
         }
     }
 
-    println!("Stack: {:?}", current_stack);
-    test_for_return && current_stack.len() == 0
+    println!("Stack: {current_stack:?}");
+    test_for_return && current_stack.is_empty()
 }
 
 /// Does pairwise validation of signatures against public keys

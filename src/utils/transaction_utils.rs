@@ -458,7 +458,7 @@ pub fn construct_p2sh_tx(
 ) -> Transaction {
     let script_hash = construct_p2sh_address(script);
 
-    println!("script_hash: {}", script_hash);
+    println!("script_hash: {script_hash}");
     let tx_out = TxOut {
         value: asset,
         locktime,
@@ -754,7 +754,7 @@ mod tests {
         assert_eq!(p2sh_script_pub_key.len(), 32);
         assert!(tx_has_valid_p2sh_script(
             &redeeming_tx.inputs[0].script_signature,
-            &p2sh_tx.outputs[0].script_public_key.as_ref().unwrap()
+            p2sh_tx.outputs[0].script_public_key.as_ref().unwrap()
         ));
 
         // TODO: Add assertion for full tx validity
