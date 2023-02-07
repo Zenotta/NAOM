@@ -1,14 +1,5 @@
 #!/bin/sh
 
-echo "//-----------------------------//"
-echo "Running automatic clippy fixes"
-echo "//-----------------------------//"
-echo " "
-cargo clippy --allow-dirty --fix
-git add -A
-echo "\033[0;32mClippy fixes done..\033[0m"
-echo " "
-
 echo " "
 echo "//-----------------------------//"
 echo "Running formatter for Rust code"
