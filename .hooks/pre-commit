@@ -13,7 +13,7 @@ echo "//-----------------------------//"
 echo "Running automatic clippy fixes"
 echo "//-----------------------------//"
 echo " "
-cargo clippy --fix
+cargo clippy --fix --allow-staged
 git add -A
 echo "\033[0;32mClippy fixes done...\033[0m"
 echo " "
