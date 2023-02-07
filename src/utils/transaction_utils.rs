@@ -654,6 +654,7 @@ mod tests {
     use super::*;
     use crate::crypto::sign_ed25519::{self as sign, Signature};
     use crate::primitives::asset::{AssetValues, ReceiptAsset};
+    use crate::script::OpCodes;
     use crate::utils::script_utils::{tx_has_valid_p2sh_script, tx_outs_are_valid};
 
     #[test]
@@ -718,7 +719,8 @@ mod tests {
     fn test_construct_a_valid_p2sh_tx() {
         let token_amount = TokenAmount(400000);
         let (tx_ins, drs_block_hash) = test_construct_valid_inputs(Some(NETWORK_VERSION_V0));
-        let script = Script::new_for_coinbase(10);
+        let mut script = Script::new_for_coinbase(10);
+        script.stack.push(StackEntry::Op(OpCodes::OP_DROP));
 
         let p2sh_tx = construct_p2sh_tx(
             tx_ins,

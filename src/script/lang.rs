@@ -60,6 +60,7 @@ impl Script {
         new_script
             .stack
             .push(StackEntry::Num(block_number as usize));
+        new_script.stack.push(StackEntry::Op(OpCodes::OP_DROP));
         new_script.stack.push(StackEntry::Bytes(asset_hash));
         new_script.stack.push(StackEntry::Signature(signature));
         new_script.stack.push(StackEntry::PubKey(pub_key));
