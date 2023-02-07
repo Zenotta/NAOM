@@ -1,6 +1,6 @@
 #![allow(unused)]
 use crate::constants::{
-    MAX_METADATA_BYTES, MAX_STACK_SIZE, NETWORK_VERSION_TEMP, NETWORK_VERSION_V0, TOTAL_TOKENS,
+    MAX_METADATA_BYTES, MAX_STACK_SIZE, NETWORK_VERSION_TEMP, NETWORK_VERSION_V0, TOTAL_TOKENS, P2SH_PREPEND,
 };
 use crate::crypto::sha3_256;
 use crate::crypto::sign_ed25519::{self as sign, PublicKey, Signature};
@@ -18,6 +18,8 @@ use bytes::Bytes;
 use hex::encode;
 use std::collections::{BTreeMap, BTreeSet};
 use tracing::{debug, error, info, trace};
+
+use super::transaction_utils::construct_p2sh_address;
 
 /// Verifies that a member of a multisig tx script is valid
 ///
@@ -85,7 +87,9 @@ pub fn tx_is_valid<'a>(
 
         if let Some(pk) = tx_out_pk {
             // Check will need to include other signature types here
-            if !tx_has_valid_p2pkh_sig(&tx_in.script_signature, &tx_out_hash, pk) {
+            if !tx_has_valid_p2pkh_sig(&tx_in.script_signature, &tx_out_hash, pk)
+                && !tx_has_valid_p2sh_script(&tx_in.script_signature, pk)
+            {
                 return false;
             }
         } else {
@@ -236,9 +240,31 @@ fn tx_has_valid_p2pkh_sig(script: &Script, outpoint_hash: &str, tx_out_pub_key: 
     }
 
     trace!(
-        "Invalid script: {:?} tx_out_pub_key: {}",
+        "Invalid P2PKH script: {:?} tx_out_pub_key: {}",
         script.stack,
         tx_out_pub_key
+    );
+
+    false
+}
+
+/// Checks whether a transaction to spend tokens in P2SH has a valid hash and executing script
+///
+/// ### Arguments
+///
+/// * `script`          - Script to validate
+/// * `address`         - Address of the P2SH transaction
+pub fn tx_has_valid_p2sh_script(script: &Script, address: &str) -> bool {
+    let p2sh_address = construct_p2sh_address(script);
+
+    if &p2sh_address == address {
+        return interpret_script(script);
+    }
+
+    trace!(
+        "Invalid P2SH script: {:?}, address: {}",
+        script.stack,
+        address
     );
 
     false

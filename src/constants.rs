@@ -59,6 +59,8 @@ pub const MAX_OPCODE: u8 = OpCodes::MAX_OPCODE as u8;
 /// The constant prepending character for a transaction
 pub const TX_PREPEND: u8 = b'g';
 
+pub const P2SH_PREPEND: u8 = b'H';
+
 /*------- PREVIOUS NETWORK VERSIONS -------*/
 
 // Network version 0

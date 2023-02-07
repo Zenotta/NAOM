@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::constants::{NETWORK_VERSION, RECEIPT_DEFAULT_DRS_TX_HASH};
+use crate::constants::{NETWORK_VERSION, P2SH_PREPEND, RECEIPT_DEFAULT_DRS_TX_HASH};
 use crate::crypto::sign_ed25519::{PublicKey, Signature};
 use crate::primitives::{
     asset::{Asset, ReceiptAsset, TokenAmount},
@@ -148,6 +148,16 @@ impl TxOut {
             _ => panic!("Cannot create TxOut for asset of type {:?}", asset),
         }
     }
+
+    /// Returns whether current tx_out is a P2SH
+    pub fn is_p2sh_tx_out(&self) -> bool {
+        if let Some(pk) = &self.script_public_key {
+            let pk_bytes = pk.as_bytes();
+            return pk_bytes[0] == P2SH_PREPEND;
+        }
+
+        false
+    }
 }
 
 /// The basic transaction that is broadcasted on the network and contained in
@@ -204,5 +214,19 @@ impl Transaction {
         self.get_create_asset()
             .map(|a| !a.is_token())
             .unwrap_or_default()
+    }
+
+    /// Returns whether current transaction is a P2SH tx
+    pub fn is_p2sh_tx(&self) -> bool {
+        if self.outputs.len() != 1 {
+            return false;
+        }
+
+        if let Some(pk) = &self.outputs[0].script_public_key {
+            let pk_bytes = pk.as_bytes();
+            return pk_bytes[0] == P2SH_PREPEND;
+        }
+
+        false
     }
 }
