@@ -1,6 +1,7 @@
 #![allow(unused)]
 use crate::constants::{
-    MAX_METADATA_BYTES, MAX_STACK_SIZE, NETWORK_VERSION_TEMP, NETWORK_VERSION_V0, TOTAL_TOKENS, P2SH_PREPEND,
+    MAX_METADATA_BYTES, MAX_STACK_SIZE, NETWORK_VERSION_TEMP, NETWORK_VERSION_V0, P2SH_PREPEND,
+    TOTAL_TOKENS,
 };
 use crate::crypto::sha3_256;
 use crate::crypto::sign_ed25519::{self as sign, PublicKey, Signature};
@@ -349,7 +350,7 @@ fn interpret_script(script: &Script) -> bool {
                 StackEntry::Op(OpCodes::OP_CREATE) => {
                     current_stack.pop();
                 }
-                
+
                 /*---- CRYPTO OPS ----*/
                 StackEntry::Op(OpCodes::OP_HASH256) => {
                     test_for_return &= interface_ops::op_hash256(&mut current_stack, None);
@@ -378,7 +379,6 @@ fn interpret_script(script: &Script) -> bool {
         }
     }
 
-    println!("Stack: {current_stack:?}");
     test_for_return && current_stack.is_empty()
 }
 
