@@ -458,7 +458,6 @@ pub fn construct_p2sh_tx(
 ) -> Transaction {
     let script_hash = construct_p2sh_address(script);
 
-    println!("script_hash: {script_hash}");
     let tx_out = TxOut {
         value: asset,
         locktime,
