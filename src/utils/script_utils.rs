@@ -566,7 +566,7 @@ fn address_has_valid_length(address: &str) -> bool {
 mod tests {
     use super::*;
     use crate::constants::RECEIPT_ACCEPT_VAL;
-    use crate::primitives::asset::{Asset, DataAsset};
+    use crate::primitives::asset::{Asset, ERDType};
     use crate::primitives::druid::DdeValues;
     use crate::primitives::transaction::OutPoint;
     use crate::utils::test_utils::generate_tx_with_ins_and_outs_assets;

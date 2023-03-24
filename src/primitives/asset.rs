@@ -94,11 +94,38 @@ impl ReceiptAsset {
     }
 }
 
-/// Data asset struct
-#[derive(Deserialize, Serialize, Debug, Clone, Eq, PartialEq, Ord, PartialOrd)]
-pub struct DataAsset {
-    pub data: Vec<u8>,
-    pub amount: u64,
+/// ERD (Electronic Resource Definition) data type enum
+#[derive(Deserialize, Serialize, Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
+pub enum ERDType {
+    SDV1 {
+        amount: u64,
+        data_hash: String,           // Original data's hash | HEX
+        data_hash_mr: String,        // Encrypted data's hash | HEX
+        perm_table: String,          // Base64-encoded perm table
+        associated_data: String,     // AEAD associated data | HEX
+        drs_tx_hash: Option<String>, // DRS tx_hash specification
+    },
+}
+
+/// Retrieves the length of an ERDType
+fn get_erd_len(erd: &ERDType) -> usize {
+    match erd {
+        ERDType::SDV1 {
+            amount: _amount,
+            data_hash,
+            data_hash_mr,
+            perm_table,
+            associated_data,
+            drs_tx_hash,
+        } => {
+            size_of::<u64>()
+                + data_hash.len()
+                + data_hash_mr.len()
+                + perm_table.len()
+                + associated_data.len()
+                + drs_tx_hash.as_ref().map_or(0, |s| s.len())
+        }
+    }
 }
 
 /// Asset struct
@@ -109,7 +136,7 @@ pub struct DataAsset {
 #[derive(Deserialize, Serialize, Debug, Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub enum Asset {
     Token(TokenAmount),
-    Data(DataAsset),
+    ERD(ERDType),
     Receipt(ReceiptAsset),
 }
 
@@ -135,7 +162,7 @@ impl Asset {
     pub fn get_drs_tx_hash(&self) -> Option<&String> {
         match self {
             Asset::Token(_) => None,
-            Asset::Data(_) => None, /* TODO: This will have to change */
+            Asset::ERD(_) => None, /* TODO: This will have to change */
             Asset::Receipt(receipt) => receipt.drs_tx_hash.as_ref(),
         }
     }
@@ -143,7 +170,7 @@ impl Asset {
     pub fn get_metadata(&self) -> Option<&String> {
         match self {
             Asset::Token(_) => None,
-            Asset::Data(_) => None,
+            Asset::ERD(_) => None,
             Asset::Receipt(receipt) => receipt.metadata.as_ref(),
         }
     }
@@ -151,7 +178,7 @@ impl Asset {
     pub fn len(&self) -> usize {
         match self {
             Asset::Token(_) => size_of::<TokenAmount>(),
-            Asset::Data(d) => d.data.len(),
+            Asset::ERD(t) => get_erd_len(t),
             Asset::Receipt(_) => size_of::<u64>(),
         }
     }
@@ -281,13 +308,6 @@ impl Asset {
         matches!(self, Asset::Receipt(_))
     }
 
-    pub fn is_empty(&self) -> bool {
-        match self {
-            Asset::Data(d) => d.data.is_empty(),
-            _ => false,
-        }
-    }
-
     pub fn token_amount(&self) -> TokenAmount {
         match self {
             Asset::Token(v) => *v,
@@ -309,6 +329,7 @@ pub struct AssetValues {
     pub tokens: TokenAmount,
     // Note: Receipts from create transactions will have `drs_tx_hash` = `t_hash`
     pub receipts: BTreeMap<String, u64>, /* `drs_tx_hash` - amount */
+    pub data: BTreeMap<String, u64>,     /* `drs_tx_hash` - amount */
 }
 
 impl ops::AddAssign for AssetValues {
@@ -319,16 +340,28 @@ impl ops::AddAssign for AssetValues {
 }
 
 impl AssetValues {
-    pub fn new(tokens: TokenAmount, receipts: BTreeMap<String, u64>) -> Self {
-        Self { tokens, receipts }
+    pub fn new(
+        tokens: TokenAmount,
+        receipts: BTreeMap<String, u64>,
+        data: BTreeMap<String, u64>,
+    ) -> Self {
+        Self {
+            tokens,
+            receipts,
+            data,
+        }
     }
 
     pub fn token_u64(tokens: u64) -> Self {
-        AssetValues::new(TokenAmount(tokens), Default::default())
+        AssetValues::new(TokenAmount(tokens), Default::default(), Default::default())
     }
 
     pub fn receipt(receipts: BTreeMap<String, u64>) -> Self {
-        AssetValues::new(TokenAmount(0), receipts)
+        AssetValues::new(TokenAmount(0), receipts, Default::default())
+    }
+
+    pub fn data(data: BTreeMap<String, u64>) -> Self {
+        AssetValues::new(TokenAmount(0), Default::default(), data)
     }
 
     pub fn is_empty(&self) -> bool {
@@ -352,7 +385,24 @@ impl AssetValues {
                     false
                 }
             }
-            _ => false,
+            Asset::ERD(erd) => match erd {
+                ERDType::SDV1 {
+                    amount: _amount,
+                    data_hash: _data_hash,
+                    data_hash_mr: _data_hash_mr,
+                    perm_table: _perm_table,
+                    associated_data: _associated_data,
+                    drs_tx_hash,
+                } => {
+                    if let Some(drs_tx_hash) = drs_tx_hash {
+                        self.data
+                            .get(drs_tx_hash)
+                            .map_or(false, |amount| *amount >= *amount)
+                    } else {
+                        false
+                    }
+                }
+            },
         }
     }
 

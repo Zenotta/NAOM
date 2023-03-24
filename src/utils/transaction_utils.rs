@@ -1,7 +1,7 @@
 use crate::constants::{NETWORK_VERSION_TEMP, NETWORK_VERSION_V0, P2SH_PREPEND, TX_PREPEND};
 use crate::crypto::sha3_256;
 use crate::crypto::sign_ed25519::{self as sign, PublicKey, SecretKey};
-use crate::primitives::asset::{Asset, DataAsset, TokenAmount};
+use crate::primitives::asset::{Asset, ERDType, TokenAmount};
 use crate::primitives::druid::{DdeValues, DruidExpectation};
 use crate::primitives::transaction::*;
 use crate::script::lang::Script;
@@ -133,11 +133,9 @@ pub fn construct_tx_in_signable_hash(previous_out: &OutPoint) -> String {
 pub fn get_asset_signable_string(asset: &Asset) -> String {
     match asset {
         Asset::Token(token_amount) => format!("Token:{}", token_amount.0),
-        Asset::Data(data_asset) => format!(
-            "Data:{}-{}",
-            hex::encode(&data_asset.data),
-            data_asset.amount
-        ),
+        Asset::ERD(erd_type) => match erd_type {
+            ERDType::SDV1 { amount, .. } => format!("ERD:{}", amount),
+        },
         Asset::Receipt(receipt) => format!("Receipt:{}", receipt.amount),
     }
 }
@@ -362,12 +360,11 @@ fn construct_create_tx_in(
 /// * `amount`              - Amount of the asset to generate
 pub fn construct_create_tx(
     block_num: u64,
-    drs: Vec<u8>,
+    drs: ERDType,
     public_key: PublicKey,
     secret_key: &SecretKey,
-    amount: u64,
 ) -> Transaction {
-    let asset = Asset::Data(DataAsset { data: drs, amount });
+    let asset = Asset::ERD(drs);
     let receiver_address = construct_address(&public_key);
 
     let tx_ins = construct_create_tx_in(block_num, &asset, public_key, secret_key);
@@ -652,7 +649,7 @@ pub fn construct_dde_tx(
 mod tests {
     use super::*;
     use crate::crypto::sign_ed25519::{self as sign, Signature};
-    use crate::primitives::asset::{AssetValues, ReceiptAsset};
+    use crate::primitives::asset::{AssetValues, ERDType, ReceiptAsset};
     use crate::script::OpCodes;
     use crate::utils::script_utils::{tx_has_valid_p2sh_script, tx_outs_are_valid};
 
@@ -661,20 +658,23 @@ mod tests {
     fn test_construct_a_valid_create_tx() {
         let (pk, sk) = sign::gen_keypair();
         let receiver_address = construct_address(&pk);
-        let amount = 1;
-        let drs = vec![0, 8, 30, 20, 1];
+        let drs = ERDType::SDV1 {
+            amount: 1,
+            data_hash: "data_hash".to_string(),
+            data_hash_mr: "data_hash_mr".to_string(),
+            perm_table: "perm_table".to_string(),
+            associated_data: "associated_data".to_string(),
+            drs_tx_hash: Some("drs_tx_hash".to_string()),
+        };
 
-        let tx = construct_create_tx(0, drs.clone(), pk, &sk, amount);
+        let tx = construct_create_tx(0, drs.clone(), pk, &sk);
 
         assert!(tx.is_create_tx());
         assert_eq!(tx.outputs.len(), 1);
         assert_eq!(tx.druid_info, None);
         assert_eq!(tx.outputs[0].drs_block_hash, None);
         assert_eq!(tx.outputs[0].script_public_key, Some(receiver_address));
-        assert_eq!(
-            tx.outputs[0].value,
-            Asset::Data(DataAsset { data: drs, amount })
-        );
+        assert_eq!(tx.outputs[0].value, Asset::ERD(drs));
     }
 
     #[test]
@@ -808,7 +808,7 @@ mod tests {
 
         let mut btree = BTreeMap::new();
         btree.insert(drs_tx_hash, 1000);
-        let tx_ins_spent = AssetValues::new(TokenAmount(0), btree);
+        let tx_ins_spent = AssetValues::new(TokenAmount(0), btree, BTreeMap::new());
 
         assert!(tx_outs_are_valid(&payment_tx_valid.outputs, tx_ins_spent));
     }
@@ -910,9 +910,13 @@ mod tests {
         let signature = sign::sign_detached(t_hash.as_bytes(), &sk);
 
         let to_asset = "2222".to_owned();
-        let data = Asset::Data(DataAsset {
-            data: vec![0, 12, 3, 5, 6],
+        let data = Asset::ERD(ERDType::SDV1 {
             amount: 1,
+            data_hash: "data_hash".to_string(),
+            data_hash_mr: "data_hash_mr".to_string(),
+            perm_table: "perm_table".to_string(),
+            associated_data: "associated_data".to_string(),
+            drs_tx_hash: Some("drs_tx_hash".to_string()),
         });
 
         let tx_const = TxConstructor {
@@ -1143,9 +1147,13 @@ mod tests {
         let assets = vec![
             Asset::token_u64(1),
             Asset::receipt(1, None, None),
-            Asset::Data(DataAsset {
-                data: vec![1, 2, 3],
+            Asset::ERD(ERDType::SDV1 {
                 amount: 1,
+                data_hash: "data_hash".to_string(),
+                data_hash_mr: "data_hash_mr".to_string(),
+                perm_table: "perm_table".to_string(),
+                associated_data: "associated_data".to_string(),
+                drs_tx_hash: Some("drs_tx_hash".to_string()),
             }),
         ];
 

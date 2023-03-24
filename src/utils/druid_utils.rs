@@ -51,7 +51,7 @@ fn expectation_met(e: &DruidExpectation, tx_source: &BTreeSet<(String, &String, 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::primitives::asset::{Asset, DataAsset, TokenAmount};
+    use crate::primitives::asset::{Asset, ERDType, TokenAmount};
     use crate::primitives::druid::{DdeValues, DruidExpectation};
     use crate::primitives::transaction::*;
     use crate::utils::transaction_utils::*;
@@ -68,9 +68,13 @@ mod tests {
         let alice_asset = Asset::Token(amount);
 
         // Bob
-        let bob_asset = Asset::Data(DataAsset {
-            data: "453094573049875".as_bytes().to_vec(),
+        let bob_asset = Asset::ERD(ERDType::SDV1 {
             amount: 1,
+            data_hash: "data_hash".to_owned(),
+            data_hash_mr: "data_hash_mr".to_owned(),
+            perm_table: "perm_table".to_owned(),
+            associated_data: "associated_data".to_owned(),
+            drs_tx_hash: Some("drs_tx_hash".to_owned()),
         });
         let bob_addr = "22222".to_owned();
 
