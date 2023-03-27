@@ -183,6 +183,10 @@ impl Asset {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self == &Asset::default()
+    }
+
     pub fn token_u64(amount: u64) -> Self {
         Asset::Token(TokenAmount(amount))
     }
@@ -387,7 +391,7 @@ impl AssetValues {
             }
             Asset::ERD(erd) => match erd {
                 ERDType::SDV1 {
-                    amount: _amount,
+                    amount: data_amount,
                     data_hash: _data_hash,
                     data_hash_mr: _data_hash_mr,
                     perm_table: _perm_table,
@@ -397,7 +401,7 @@ impl AssetValues {
                     if let Some(drs_tx_hash) = drs_tx_hash {
                         self.data
                             .get(drs_tx_hash)
-                            .map_or(false, |amount| *amount >= *amount)
+                            .map_or(false, |amount| *amount >= *data_amount)
                     } else {
                         false
                     }

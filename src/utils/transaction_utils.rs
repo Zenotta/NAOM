@@ -134,7 +134,7 @@ pub fn get_asset_signable_string(asset: &Asset) -> String {
     match asset {
         Asset::Token(token_amount) => format!("Token:{}", token_amount.0),
         Asset::ERD(erd_type) => match erd_type {
-            ERDType::SDV1 { amount, .. } => format!("ERD:{}", amount),
+            ERDType::SDV1 { amount, .. } => format!("ERD:{amount}"),
         },
         Asset::Receipt(receipt) => format!("Receipt:{}", receipt.amount),
     }
