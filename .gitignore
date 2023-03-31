@@ -1,3 +1,4 @@
 /target
 .DS_Store
 /src/db/db/**/*
+.VSCodeCounter
