@@ -45,7 +45,7 @@ impl Stack {
         true
     }
 
-    /// Returns and removes the top item on the stack
+    /// Pops the top item from the stack
     pub fn pop(&mut self) -> Option<StackEntry> {
         self.main_stack.pop()
     }
@@ -92,6 +92,50 @@ impl ConditionStack {
         Self {
             size: ZERO,
             first_false_pos: None,
+        }
+    }
+
+    /// Checks if all values are true
+    pub fn all_true(&self) -> bool {
+        self.first_false_pos.is_none()
+    }
+
+    /// Checks if the condition stack is empty
+    pub fn is_empty(&self) -> bool {
+        self.size == ZERO
+    }
+
+    /// Pushes a new value onto the condition stack
+    pub fn push(&mut self, cond: bool) {
+        if self.first_false_pos.is_none() && !cond {
+            self.first_false_pos = Some(self.size);
+        }
+        self.size += 1;
+    }
+
+    /// Pops the top value from the condition stack
+    pub fn pop(&mut self) {
+        assert!(self.size > ZERO, "Condition stack is empty");
+        self.size -= ONE;
+        if let Some(pos) = self.first_false_pos {
+            if pos == self.size {
+                self.first_false_pos.take();
+            }
+        }
+    }
+
+    /// Toggles the top value on the condition stack
+    pub fn toggle(&mut self) {
+        assert!(self.size > ZERO, "Condition stack is empty");
+        match self.first_false_pos {
+            Some(pos) => {
+                if pos == self.size - ONE {
+                    self.first_false_pos = None;
+                }
+            }
+            _ => {
+                self.first_false_pos = Some(self.size - ONE);
+            }
         }
     }
 }

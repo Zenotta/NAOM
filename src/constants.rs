@@ -130,10 +130,21 @@ pub const OP16_DESC: &str = "Pushes number SIXTEEN onto the stack";
 
 // control flow
 pub const OPNOP: &str = "OP_NOP";
+pub const OPIF: &str = "OP_IF";
+pub const OPNOTIF: &str = "OP_NOTIF";
+pub const OPELSE: &str = "OP_ELSE";
+pub const OPENDIF: &str = "OP_ENDIF";
 pub const OPVERIFY: &str = "OP_VERIFY";
 pub const OPRETURN: &str = "OP_RETURN";
 
 pub const OPNOP_DESC: &str = "Does nothing";
+pub const OPIF_DESC: &str =
+    "Checks if the top item on the stack is not ZERO and executes the next block of instructions";
+pub const OPNOTIF_DESC: &str =
+    "Checks if the top item on the stack is ZERO and executes the next block of instructions";
+pub const OPELSE_DESC: &str =
+    "Executes the next block of instructions if the previous OP_IF or OP_NOTIF was not executed";
+pub const OPENDIF_DESC: &str = "Ends an OP_IF or OP_NOTIF block";
 pub const OPVERIFY_DESC: &str =
     "Removes the top item from the stack and ends execution with an error if it is ZERO";
 pub const OPRETURN_DESC: &str = "Ends execution with an error";

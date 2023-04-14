@@ -272,6 +272,50 @@ pub fn op_nop(stack: &mut Stack) -> bool {
     true
 }
 
+/// OP_IF: Checks if the top item on the stack is not ZERO and executes the next block of instructions
+///
+/// ### Arguments
+///
+/// * `stack`  - mutable reference to the stack
+pub fn op_if(stack: &mut Stack) -> bool {
+    let (op, desc) = (OPIF, OPIF_DESC);
+    trace(op, desc);
+    true
+}
+
+/// OP_NOTIF: Checks if the top item on the stack is ZERO and executes the next block of instructions
+///
+/// ### Arguments
+///
+/// * `stack`  - mutable reference to the stack
+pub fn op_notif(stack: &mut Stack) -> bool {
+    let (op, desc) = (OPNOTIF, OPNOTIF_DESC);
+    trace(op, desc);
+    true
+}
+
+/// OP_ELSE: Executes the next block of instructions if the previous OP_IF or OP_NOTIF was not executed
+///
+/// ### Arguments
+///
+/// * `stack`  - mutable reference to the stack
+pub fn op_else(stack: &mut Stack) -> bool {
+    let (op, desc) = (OPELSE, OPELSE_DESC);
+    trace(op, desc);
+    true
+}
+
+/// OP_ ENDIF: Ends an OP_IF or OP_NOTIF block
+///
+/// ### Arguments
+///
+/// * `stack`  - mutable reference to the stack
+pub fn op_endif(stack: &mut Stack) -> bool {
+    let (op, desc) = (OPENDIF, OPENDIF_DESC);
+    trace(op, desc);
+    true
+}
+
 /// OP_VERIFY: Removes the top item from the stack and ends execution with an error if it is ZERO
 ///
 /// Example: OP_VERIFY([x]) -> []   if x != 0
@@ -2452,11 +2496,10 @@ fn verify_multisig(sigs: &[Signature], msg: &String, pks: &mut Vec<PublicKey>) -
             }
         }
         if num_valid_sigs != index_sig + ONE {
-            // sig did not match any pk
             return false;
         }
     }
-    true // all sigs matched a pk
+    true
 }
 
 /*---- TESTS ----*/
