@@ -28,6 +28,7 @@ sha3 = "0.9.1"
 time = "0.2.25"
 tracing = "0.1.19"
 base64 = "0.13.0"
+rayon = "1.7.0"
 
 [features]
 default = []
