@@ -14,10 +14,7 @@ use std::vec::Vec;
 ///
 /// * `transactions` - List of transactions to hash
 fn hash_transactions(transactions: &[Transaction]) -> Vec<String> {
-    let mut hashes: Vec<String> = transactions
-        .par_iter()
-        .map(|tx| construct_tx_hash(tx))
-        .collect();
+    let mut hashes: Vec<String> = transactions.par_iter().map(construct_tx_hash).collect();
 
     if transactions.len() % 2 == 1 {
         let dup = hashes.last().unwrap().clone();
