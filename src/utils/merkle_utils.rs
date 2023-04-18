@@ -3,74 +3,118 @@ use crate::primitives::transaction::Transaction;
 use crate::utils::transaction_utils::construct_tx_hash;
 use bincode::serialize;
 use bytes::Bytes;
+use rayon::prelude::*;
 use std::cmp::min;
 use std::vec::Vec;
 
-pub fn build_hash_tree(transactions: Vec<Transaction>, coinbase: Transaction) -> Vec<Vec<String>> {
-    // Instantiate empty list for leaf nodes.
-    // Note: In the Rust implementation, the size of the array will be determined from the fixed block size.
-    let mut tree: Vec<Vec<String>> = vec![Vec::new()];
+/// Hashes a list of transactions in parallel. This will duplicate the last transaction hash if the
+/// number of transactions is odd.
+///
+/// ### Arguments
+///
+/// * `transactions` - List of transactions to hash
+fn hash_transactions(transactions: &[Transaction]) -> Vec<String> {
+    let mut hashes: Vec<String> = transactions
+        .par_iter()
+        .map(|tx| construct_tx_hash(tx))
+        .collect();
 
-    // Hash transactions to create leaf nodes.
-    for tx in &transactions {
-        tree[0].push(construct_tx_hash(tx));
+    if transactions.len() % 2 == 1 {
+        let dup = hashes.last().unwrap().clone();
+        hashes.push(dup);
     }
 
-    // If number of transactions is odd, then duplicate last transaction hash.
-    if tree[0].len() % 2 == 1 {
-        let dup = tree[0].last().unwrap().clone();
-        tree[0].push(dup);
-    }
+    hashes
+}
 
-    // Calculate Merkle tree depth (root level = 0)
-    let d = ((tree[0].len() as f64).log2().ceil()) as usize;
+/// Constructs a Merkle tree from a list of transactions and the coinbase transaction
+///
+/// ### Arguments
+///
+/// * `transactions` - List of transactions to hash
+/// * `coinbase` - Coinbase transaction to add
+pub fn build_hash_tree(transactions: &[Transaction], coinbase: &Transaction) -> Vec<Vec<String>> {
+    let depth = (transactions.len() as f32).log2().ceil() as usize;
+    let mut num_nodes = transactions.len();
+
+    // + 2 because we need an extra space for metaroot hash
+    let mut tree = Vec::with_capacity(depth + 2);
+    tree.push(hash_transactions(transactions));
 
     // Build hash tree up to root
-    for i in 1..d {
-        // Append new row to tree
-        tree.push(Vec::new());
+    for i in 0..depth {
+        let next_nodes = num_nodes / 2;
+        let mut parent_hashes = Vec::with_capacity(next_nodes);
 
-        // Determine size of layer directly below current layer and ensure that
-        // the size of the current layer is an even number.
-        let cur_layer = tree[i - 1].len() + tree[i - 1].len() % 2;
+        for j in 0..next_nodes {
+            let left_child_index = j * 2;
+            let right_child_index = min(left_child_index + 1, num_nodes - 1);
 
-        for j in 0..cur_layer {
-            if j % 2 == 1 {
-                let left_child = tree[i - 1][j - 1].clone();
-                let right_child = tree[i - 1][min(j + 1, cur_layer - 1)].clone();
-                tree[i].push(hash_node(&left_child, &right_child));
-            }
+            let left_child = tree[i][left_child_index].clone();
+            let right_child = tree[i][right_child_index].clone();
+
+            let parent_hash = hash_node(&left_child, &right_child);
+            parent_hashes.push(parent_hash);
         }
 
-        // If number of transactions is odd, duplicate last transaction hash
-        if tree[i].len() % 2 == 1 {
-            let dup = tree[i].last().unwrap().clone();
-            tree[i].push(dup);
-        }
+        tree.push(parent_hashes);
+        num_nodes = next_nodes;
     }
 
-    // Compute Merkle tree root
-    let left_child = tree[d - 1][0].clone();
-    let right_child = tree[d - 1][1].clone();
-    let merkle_root_hash = hash_node(&left_child, &right_child);
+    // Add coinbase and metaroot
+    add_coinbase_and_metaroot(&mut tree, coinbase, depth);
 
-    // Hash coinbase transaction
-    let coinbase_hash = construct_tx_hash(&coinbase);
-
-    // Calculate the "meta root" hash
-    let meta_root_hash = hash_node(&merkle_root_hash, &coinbase_hash);
-
-    // Insert coinbase hash at same level as the transaction tree root hash
-    tree[d].push(coinbase_hash.clone());
-
-    // Add an additional level to the tree which includes only the meta root hash
-    tree.push(vec![meta_root_hash]);
-
-    tree.reverse();
     tree
 }
 
+/// Adds the coinbase transaction and metaroot to the merkle tree
+///
+/// ### Arguments
+///
+/// * `tree` - Merkle tree to add coinbase and metaroot to
+/// * `coinbase` - Coinbase transaction to add
+/// * `depth` - Depth of the merkle tree
+fn add_coinbase_and_metaroot(tree: &mut Vec<Vec<String>>, coinbase: &Transaction, depth: usize) {
+    let coinbase_hash = construct_tx_hash(coinbase);
+    tree[depth].push(coinbase_hash);
+
+    let metaroot = hash_node(&tree[depth][0], &tree[depth][1]);
+    tree.push(vec![metaroot]);
+}
+
+/// Hashes two nodes as strings together using SHA3-256
+///
+/// ### Arguments
+///
+/// * `left` - Left node to hash
+/// * `right` - Right node to hash
 fn hash_node(left: &str, right: &str) -> String {
     let concat = Bytes::from(serialize(&vec![left, right]).unwrap());
     hex::encode(sha3_256::digest(&concat))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn create_tx() -> Transaction {
+        Transaction {
+            inputs: vec![],
+            outputs: vec![],
+            version: 0,
+            druid_info: None,
+        }
+    }
+
+    #[test]
+    fn should_construct_valid_merkle_tree() {
+        let txs = vec![create_tx(), create_tx(), create_tx(), create_tx()];
+        let tree = build_hash_tree(&txs, &create_tx());
+
+        assert_eq!(tree.len(), 4);
+        assert_eq!(tree[0].len(), 4);
+        assert_eq!(tree[1].len(), 2);
+        assert_eq!(tree[2].len(), 2); // + 1 for coinbase
+        assert_eq!(tree[3].len(), 1); // metaroot
+    }
 }
