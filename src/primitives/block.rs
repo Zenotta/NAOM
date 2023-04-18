@@ -4,6 +4,7 @@ use crate::crypto::sha3_256::{self, Sha3_256};
 use crate::crypto::sign_ed25519::PublicKey;
 use crate::primitives::asset::Asset;
 use crate::primitives::transaction::{Transaction, TxIn, TxOut};
+use crate::utils::merkle_utils::MerkleTree;
 use bincode::{deserialize, serialize};
 use bytes::Bytes;
 use serde::{Deserialize, Serialize};
@@ -11,8 +12,6 @@ use std::convert::TryInto;
 
 use rand::distributions::Alphanumeric;
 use rand::{thread_rng, Rng};
-
-use merkle_log::{MemoryStore, MerkleLog, Store};
 
 /// Block header, which contains a smaller footprint view of the block.
 /// Hash records are assumed to be 256 bit
@@ -89,10 +88,10 @@ impl Block {
 
     /// Get the merkle root for the current set of transactions
     pub async fn set_txs_merkle_root_and_hash(&mut self) {
-        let merkle_root = build_hex_merkle_root(&self.transactions).await;
+        let merkle_tree = MerkleTree::new(&self.transactions);
         let txs_hash = build_hex_txs_hash(&self.transactions);
 
-        self.header.txs_merkle_root_and_hash = (merkle_root, txs_hash);
+        self.header.txs_merkle_root_and_hash = (merkle_tree.root, txs_hash);
     }
 }
 
@@ -128,42 +127,6 @@ pub fn gen_random_hash() -> String {
 pub fn build_hex_txs_hash(transactions: &[String]) -> String {
     let txs = serialize(transactions).unwrap();
     hex::encode(sha3_256::digest(&txs))
-}
-
-/// Builds hex encoded merkle root of the passed transactions
-///
-/// ### Arguments
-///
-/// * `transactions`    - Transactions to construct a merkle tree for
-pub async fn build_hex_merkle_root(transactions: &[String]) -> String {
-    let merkle_result = build_merkle_tree(transactions).await;
-    let merkle_root = merkle_result.map(|(t, _)| hex::encode(t.root()));
-    merkle_root.unwrap_or_default()
-}
-
-/// Builds a merkle tree of the passed transactions
-///
-/// ### Arguments
-///
-/// * `transactions`    - Transactions to construct a merkle tree for
-pub async fn build_merkle_tree(
-    transactions: &[String],
-) -> Option<(MerkleLog<Sha3_256>, MemoryStore)> {
-    let mut store = MemoryStore::default();
-
-    if let Some((first_entry, other_entries)) = transactions.split_first() {
-        let mut log = MerkleLog::<Sha3_256>::new(&first_entry, &mut store)
-            .await
-            .unwrap();
-
-        for entry in other_entries {
-            log.append(entry, &mut store).await.unwrap();
-        }
-
-        return Some((log, store));
-    }
-
-    None
 }
 
 /*---- TESTS ----*/
@@ -210,29 +173,5 @@ mod tests {
                 "2bf86b48530112f14cbc516f2f7085cdc886a88b475d52e9eaa8cef526479e0f".to_owned()
             )
         );
-    }
-
-    #[actix_rt::test]
-    /// Ensures that a tx's entry in the merkle tree can be successfully proven
-    async fn should_produce_valid_merkle_proof() {
-        let mut transactions = vec![
-            "f479fc771c19c64b14b1b9e446ccccf36b6d705c891eb9a7662c82134e362732".to_string(),
-            "ac24e4c5dc8d0a29cac34ddcf7902bc2f2e8a98ec376def02c06db267d0f5477".to_string(),
-            "4d04366cb153bdcc11b97a9d1176fc889eafc63edbd2c010a6a62a4f9232d156".to_string(),
-            "6486b86af39db28e4f61c7b484e0869ad478e8cb2475b91e92d1b721b70d1746".to_string(),
-            "03b45b843d60b1e43241553c9aeb95fed82cc1bbb599c6c066ddaa75709b3186".to_string(),
-            "8d0250ea0864ac426fe4f4142dae721c74da732476de83d424e1bab638238a7".to_string(),
-            "f57e38fb8499b7c2b3d4cf75a24a5dd8a8f7b46f28b9671eb8168ffb93a85424".to_string(),
-            "e0acad209b680e61c3ef4624d9a61b32a5e7e3f0691a8f8d41fd50b1c946e338".to_string(),
-        ];
-
-        let (mtree, store) = build_merkle_tree(&transactions).await.unwrap();
-        let check_entry = sha3_256::digest(transactions[0].as_bytes());
-        let proof = mtree
-            .prove(0, &from_slice(&check_entry), &store)
-            .await
-            .unwrap();
-
-        assert!(mtree.verify(0, &from_slice(&check_entry), &proof));
     }
 }
