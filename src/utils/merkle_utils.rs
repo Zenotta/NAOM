@@ -49,7 +49,7 @@ impl MerkleTree {
         MerkleTree {
             root: tree[depth][0].clone(),
             tree,
-            depth,
+            depth: depth + 1,
         }
     }
 
@@ -98,9 +98,16 @@ mod tests {
         let txs = [create_tx(), create_tx(), create_tx(), create_tx()];
         let mt = MerkleTree::new(&txs);
 
+        println!("{:?}", mt.tree);
+
+        assert_eq!(mt.depth, 3);
         assert_eq!(mt.tree.len(), 3);
         assert_eq!(mt.tree[0].len(), 4);
         assert_eq!(mt.tree[1].len(), 2);
         assert_eq!(mt.tree[2].len(), 1);
+        assert_eq!(
+            mt.root,
+            "e00dd9bb3ae6602667f78469ea594c9ed0b70847b94c5ec76247e6f3868c4669".to_string()
+        );
     }
 }
