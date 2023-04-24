@@ -1,3 +1,5 @@
+use crate::script::OpCodes;
+
 /*------- TRANSACTION CONSTANTS -------*/
 pub const TX_PREPEND: u8 = b'g';
 pub const RECEIPT_DEFAULT_DRS_TX_HASH: &str = "default_drs_tx_hash";
@@ -49,6 +51,15 @@ pub const MAX_STACK_SIZE: u16 = 1000;
 // Threshold for lock_time: below this value it is interpreted as block number,
 // otherwise as UNIX timestamp.
 pub const LOCKTIME_THRESHOLD: u32 = 500000000; // Tue Nov 5 00:53:20 1985 UTC
+
+// Maximum value that an opcode can be
+pub const MAX_OPCODE: u8 = OpCodes::MAX_OPCODE as u8;
+
+/*------- MERKLE CONSTANTS ------ */
+
+// Limit of leaf nodes before switching to hashmap lookup
+// NOTE: This number needs to benchmarked and adjusted
+pub const LEAF_NODE_LIMIT: usize = 1000;
 
 /*------- NUMBERS -------*/
 pub const ZERO: usize = 0;
