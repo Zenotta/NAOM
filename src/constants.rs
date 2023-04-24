@@ -54,6 +54,12 @@ pub const LOCKTIME_THRESHOLD: u32 = 500000000; // Tue Nov 5 00:53:20 1985 UTC
 // Maximum value that an opcode can be
 pub const MAX_OPCODE: u8 = OpCodes::MAX_OPCODE as u8;
 
+/*------- MERKLE CONSTANTS ------ */
+
+// Limit of leaf nodes before switching to hashmap lookup
+// NOTE: This number needs to benchmarked and adjusted
+pub const LEAF_NODE_LIMIT: usize = 1000;
+
 /*------- STORAGE CONSTANTS -------*/
 
 /// The constant prepending character for a transaction
