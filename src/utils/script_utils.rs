@@ -8,7 +8,7 @@ use crate::primitives::asset::{Asset, AssetValues, ReceiptAsset, TokenAmount};
 use crate::primitives::druid::DruidExpectation;
 use crate::primitives::transaction::*;
 use crate::script::interface_ops::*;
-use crate::script::lang::{Script, Stack, ConditionStack};
+use crate::script::lang::{ConditionStack, Script, Stack};
 use crate::script::{OpCodes, StackEntry};
 use crate::utils::error_utils::*;
 use crate::utils::transaction_utils::{
