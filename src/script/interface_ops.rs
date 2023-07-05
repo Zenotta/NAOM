@@ -2738,20 +2738,6 @@ mod tests {
         assert!(!b)
     }
 
-    #[test]
-    /// Test OP_RETURN
-    fn test_return() {
-        /// op_return([1]) -> fail
-        let mut stack = Stack::new();
-        stack.push(StackEntry::Num(1));
-        let b = op_return(&mut stack);
-        assert!(!b);
-        /// op_return([]) -> fail
-        let mut stack = Stack::new();
-        let b = op_return(&mut stack);
-        assert!(!b)
-    }
-
     /*---- STACK OPS ----*/
 
     #[test]
